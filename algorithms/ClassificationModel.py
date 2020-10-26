@@ -32,6 +32,7 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+
 class ClassificationModel(Algorithm):
     def __init__(self, opt):
         Algorithm.__init__(self, opt)
@@ -48,45 +49,45 @@ class ClassificationModel(Algorithm):
         return self.process_batch(batch, do_train=False)
 
     def process_batch(self, batch, do_train=True):
-        #*************** LOAD BATCH (AND MOVE IT TO GPU) ********
+        # *************** LOAD BATCH (AND MOVE IT TO GPU) ********
         start = time.time()
         self.tensors['dataX'].resize_(batch[0].size()).copy_(batch[0])
         self.tensors['labels'].resize_(batch[1].size()).copy_(batch[1])
         dataX = self.tensors['dataX']
         labels = self.tensors['labels']
         batch_load_time = time.time() - start
-        #********************************************************
+        # ********************************************************
 
-        #********************************************************
+        # ********************************************************
         start = time.time()
-        if do_train: # zero the gradients
+        if do_train:  # zero the gradients
             self.optimizers['model'].zero_grad()
-        #********************************************************
+        # ********************************************************
 
-        #***************** SET TORCH VARIABLES ******************
+        # ***************** SET TORCH VARIABLES ******************
         dataX_var = torch.autograd.Variable(dataX, volatile=(not do_train))
         labels_var = torch.autograd.Variable(labels, requires_grad=False)
-        #********************************************************
+        # ********************************************************
 
-        #************ FORWARD THROUGH NET ***********************
+        # ************ FORWARD THROUGH NET ***********************
         pred_var = self.networks['model'](dataX_var)
-        #********************************************************
+        # ********************************************************
 
-        #*************** COMPUTE LOSSES *************************
+        # *************** COMPUTE LOSSES *************************
         record = {}
         loss_total = self.criterions['loss'](pred_var, labels_var)
-        record['prec1'] = accuracy(pred_var.data, labels, topk=(1,))[0][0]
-        record['loss'] = loss_total.data[0]
-        #********************************************************
+        record['prec1'] = accuracy(pred_var.data, labels, topk=(1,))[0].item()
+        record['loss'] = loss_total.data.item()
+        # ********************************************************
 
-        #****** BACKPROPAGATE AND APPLY OPTIMIZATION STEP *******
+        # ****** BACKPROPAGATE AND APPLY OPTIMIZATION STEP *******
         if do_train:
             loss_total.backward()
             self.optimizers['model'].step()
-        #********************************************************
+        # ********************************************************
         batch_process_time = time.time() - start
         total_time = batch_process_time + batch_load_time
-        record['load_time'] = 100*(batch_load_time/total_time)
-        record['process_time'] = 100*(batch_process_time/total_time)
+        record['load_time'] = 100 * (batch_load_time / total_time)
+        record['process_time'] = 100 * (batch_process_time / total_time)
 
         return record

@@ -22,6 +22,7 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+
 class FeatureClassificationModel(Algorithm):
     def __init__(self, opt):
         self.out_feat_keys = opt['out_feat_keys']
@@ -39,33 +40,33 @@ class FeatureClassificationModel(Algorithm):
         return self.process_batch(batch, do_train=False)
 
     def process_batch(self, batch, do_train=True):
-        #*************** LOAD BATCH (AND MOVE IT TO GPU) ********
+        # *************** LOAD BATCH (AND MOVE IT TO GPU) ********
         start = time.time()
         self.tensors['dataX'].resize_(batch[0].size()).copy_(batch[0])
         self.tensors['labels'].resize_(batch[1].size()).copy_(batch[1])
         dataX = self.tensors['dataX']
         labels = self.tensors['labels']
         batch_load_time = time.time() - start
-        #********************************************************
+        # ********************************************************
 
-        #********************************************************
+        # ********************************************************
         start = time.time()
         out_feat_keys = self.out_feat_keys
         finetune_feat_extractor = self.optimizers['feat_extractor'] is not None
-        if do_train: # zero the gradients
-            self.optimizers['classifier'].zero_grad() 
+        if do_train:  # zero the gradients
+            self.optimizers['classifier'].zero_grad()
             if finetune_feat_extractor:
                 self.optimizers['feat_extractor'].zero_grad()
             else:
                 self.networks['feat_extractor'].eval()
-        #********************************************************
+        # ********************************************************
 
-        #***************** SET TORCH VARIABLES ******************
+        # ***************** SET TORCH VARIABLES ******************
         dataX_var = Variable(dataX, volatile=((not do_train) or (not finetune_feat_extractor)))
         labels_var = Variable(labels, requires_grad=False)
-        #********************************************************
+        # ********************************************************
 
-        #************ FORWARD PROPAGATION ***********************
+        # ************ FORWARD PROPAGATION ***********************
         feat_var = self.networks['feat_extractor'](dataX_var, out_feat_keys=out_feat_keys)
         if not finetune_feat_extractor:
             if isinstance(feat_var, (list, tuple)):
@@ -74,34 +75,34 @@ class FeatureClassificationModel(Algorithm):
             else:
                 feat_var = Variable(feat_var.data, volatile=(not do_train))
         pred_var = self.networks['classifier'](feat_var)
-        #********************************************************
+        # ********************************************************
 
-        #*************** COMPUTE LOSSES *************************
+        # *************** COMPUTE LOSSES *************************
         record = {}
         if isinstance(pred_var, (list, tuple)):
             loss_total = None
             for i in range(len(pred_var)):
                 loss_this = self.criterions['loss'](pred_var[i], labels_var)
                 loss_total = loss_this if (loss_total is None) else (loss_total + loss_this)
-                record['prec1_c'+str(1+i)] = accuracy(pred_var[i].data, labels, topk=(1,))[0][0]
-                record['prec5_c'+str(1+i)] = accuracy(pred_var[i].data, labels, topk=(5,))[0][0]
+                record['prec1_c' + str(1 + i)] = accuracy(pred_var[i].data, labels, topk=(1,))[0][0]
+                record['prec5_c' + str(1 + i)] = accuracy(pred_var[i].data, labels, topk=(5,))[0][0]
         else:
             loss_total = self.criterions['loss'](pred_var, labels_var)
             record['prec1'] = accuracy(pred_var.data, labels, topk=(1,))[0][0]
             record['prec5'] = accuracy(pred_var.data, labels, topk=(5,))[0][0]
         record['loss'] = loss_total.data[0]
-        #********************************************************
+        # ********************************************************
 
-        #****** BACKPROPAGATE AND APPLY OPTIMIZATION STEP *******
+        # ****** BACKPROPAGATE AND APPLY OPTIMIZATION STEP *******
         if do_train:
             loss_total.backward()
             self.optimizers['classifier'].step()
             if finetune_feat_extractor:
                 self.optimizers['feat_extractor'].step()
-        #********************************************************
+        # ********************************************************
         batch_process_time = time.time() - start
         total_time = batch_process_time + batch_load_time
-        record['load_time'] = 100*(batch_load_time/total_time)
-        record['process_time'] = 100*(batch_process_time/total_time)
+        record['load_time'] = 100 * (batch_load_time / total_time)
+        record['process_time'] = 100 * (batch_process_time / total_time)
 
         return record
